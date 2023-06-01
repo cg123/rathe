@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, TypeAlias, Union
+from typing import List, Optional, Union
 
 
 class MessageSender(Enum):
@@ -75,6 +75,13 @@ class InstructPrompt:
                 ChatMessage(MessageSender.model, self.output),
             ]
         )
+
+
+try:
+    from typing import TypeAlias
+except ImportError:
+    # 🙃
+    TypeAlias = type
 
 
 CompletionPrompt: TypeAlias = str
