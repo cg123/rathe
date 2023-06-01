@@ -171,6 +171,9 @@ class WrapperStrings:
 
     def wrap_format(self, text: str, **kwargs) -> str:
         prefix = self.prefix.format(**kwargs)
+        if text is None:
+            return prefix
+        
         suffix = self.suffix.format(**kwargs)
         return f"{prefix}{text}{suffix}"
 
@@ -195,7 +198,7 @@ class AlpacaPromptFormatter(AbstractPromptFormatter):
         res = FormatResult()
 
         if isinstance(prompt, ChatPrompt) or (
-            isinstance(prompt, InstructPrompt) and prompt.instruction
+            isinstance(prompt, InstructPrompt) and prompt.input
         ):
             res.add(self.system_prompt, is_input=True)
         else:
@@ -203,16 +206,16 @@ class AlpacaPromptFormatter(AbstractPromptFormatter):
 
         if isinstance(prompt, InstructPrompt):
             res.add(
-                self.instruction_wrap.wrap_fmt(prompt.instruction, **special_tokens),
+                self.instruction_wrap.wrap_format(prompt.instruction, **special_tokens),
                 is_input=True,
             )
             if prompt.input:
                 res.add(
-                    self.input_wrap.wrap_fmt(prompt.input, **special_tokens),
+                    self.input_wrap.wrap_format(prompt.input, **special_tokens),
                     is_input=True,
                 )
 
-            res.add(self.output_wrap.wrap_fmt(prompt.output, **special_tokens))
+            res.add(self.output_wrap.wrap_format(prompt.output, **special_tokens))
         elif isinstance(prompt, ChatPrompt):
             for message in prompt.messages:
                 from_model = False
