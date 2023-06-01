@@ -183,3 +183,36 @@ class CompletionParser(AbstractPromptParser):
 
     def parse(self, prompt: Dict[str, Any]) -> Prompt:
         return prompt[self.key]
+
+
+def get_parser(type_: str) -> AbstractPromptParser:
+    if type_ == "alpaca":
+        return GenericInstructParser.alpaca()
+    elif type_ == "sharegpt":
+        return ShareGPTParser()
+    elif type_ == "completion":
+        return CompletionParser()
+    elif type_ == "jeopardy":
+        return GenericInstructParser.jeopardy()
+    elif type_ == "oasst":
+        return GenericInstructParser.oasst()
+    elif type_ == "gpteacher":
+        return GenericInstructParser.gpteacher()
+    elif type_ == "gpt4all":
+        return GenericInstructParser.gpt4all()
+    elif type_ == "reflection":
+        raise NotImplementedError()
+    elif type_ == "explainchoice":
+        return GenericInstructParser.multiple_choice(
+            instruction_text="Choose the answer that best answers the question. "
+            "Explain your reasoning."
+        )
+    elif type_ == "concisechoice":
+        return GenericInstructParser.multiple_choice(
+            instruction_text="Choose the answer that best answers the question. "
+            "Be concise in your response."
+        )
+    elif type_ == "summarizetldr":
+        return GenericInstructParser.tldr()
+    else:
+        raise RuntimeError(f"Unknown parser type: {type_}")

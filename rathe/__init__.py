@@ -16,6 +16,7 @@ from .parsing import (
     AbstractPromptParser,
     GenericInstructParser,
     ShareGPTParser,
+    get_parser,
 )
 
 
@@ -31,4 +32,6 @@ __all__ = [
     ChatPrompt,
     ChatMessage,
     MessageSender,
+    get_formatter,
+    get_parser,
 ]
