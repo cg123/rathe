@@ -74,6 +74,7 @@ class FormatResult:
         generate_labels: bool = True,
         input_token_id: int = -100,
         add_bos: bool = True,
+        eos_after_output: bool = False,
     ) -> Dict[str, "torch.Tensor"]:
         """Tokenize the chunks of text using the provided tokenizer and return a
         dictionary with the tokenized input, attention mask, and labels (if requested).
@@ -92,13 +93,16 @@ class FormatResult:
         chunk.
 
         :param tokenizer: An instance of transformers.PreTrainedTokenizerBase used to
-                          tokenize text.
+            tokenize text.
         :param generate_labels: If True, generate labels for each token indicating if
-                                the token is from an input chunk, defaults to True.
+            the token is from an input chunk, defaults to True.
         :param input_token_id: The integer to use as the token label for input chunks,
-                               defaults to -100.
+            defaults to -100.
         :param add_bos: If True, a BOS (Beginning of String) token is added at the start
-                        of the first chunk, defaults to True.
+            of the first chunk, defaults to True.
+        :param eos_after_output: If True, an EOS (End of String) token is added after
+            each output chunk in the labels, but not the input, used as a learning
+            signal for the model, defaults to False.
         :return: A dictionary containing 'input_ids' and 'attention_mask' for each
                 token, and 'labels' for each token if generate_labels is True.
         """
@@ -112,19 +116,23 @@ class FormatResult:
         if generate_labels:
             res["labels"] = []
 
+        last_was_output = False
         for i, chunk in enumerate(self.chunks):
             tokenized = tokenizer(
                 chunk.text,
                 return_tensors="pt",
                 add_special_tokens=True,
             )
+            # remove extraneous batch dimension
+            for key in tokenized:
+                tokenized[key] = tokenized[key].squeeze(0)
 
-            if tokenized["input_ids"][:, 0] == tokenizer.bos_token_id and (
+            if tokenized["input_ids"][0] == tokenizer.bos_token_id and (
                 i > 0 or not add_bos
             ):
                 # strip BOS token from all but the first chunk
-                tokenized["input_ids"] = tokenized["input_ids"][:, 1:]
-                tokenized["attention_mask"] = tokenized["attention_mask"][:, 1:]
+                tokenized["input_ids"] = tokenized["input_ids"][1:]
+                tokenized["attention_mask"] = tokenized["attention_mask"][1:]
 
             for key in ("input_ids", "attention_mask"):
                 res[key].append(tokenized[key])
@@ -134,7 +142,12 @@ class FormatResult:
                 if chunk.is_input:
                     labels = torch.ones_like(labels)
                     labels *= input_token_id
+                    if eos_after_output and last_was_output:
+                        labels[0] = tokenizer.eos_token_id
+
                 res["labels"].append(labels)
+
+            last_was_output = not chunk.is_input
 
         for key in res:
             res[key] = torch.cat(res[key], dim=-1)
@@ -173,7 +186,7 @@ class WrapperStrings:
         prefix = self.prefix.format(**kwargs)
         if text is None:
             return prefix
-        
+
         suffix = self.suffix.format(**kwargs)
         return f"{prefix}{text}{suffix}"
 
