@@ -1,3 +1,4 @@
+from typing import Any, Dict
 from .prompt import (
     Prompt,
     InstructPrompt,
@@ -10,6 +11,7 @@ from .formatting import (
     AbstractPromptFormatter,
     AlpacaPromptFormatter,
     ChatPromptFormatter,
+    TokenizationOptions,
     get_formatter,
 )
 from .parsing import (
@@ -24,11 +26,13 @@ __all__ = [
     AbstractPromptFormatter,
     AlpacaPromptFormatter,
     ChatPromptFormatter,
+    TokenizationOptions,
     AbstractPromptParser,
     GenericInstructParser,
     ShareGPTParser,
     Prompt,
     InstructPrompt,
+    CompletionPrompt,
     ChatPrompt,
     ChatMessage,
     MessageSender,

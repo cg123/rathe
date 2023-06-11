@@ -139,6 +139,10 @@ class GenericInstructParser(AbstractPromptParser):
     @classmethod
     def gpteacher(cls) -> "GenericInstructParser":
         return GenericInstructParser("instruction", "response", "input")
+    
+    @classmethod
+    def dolly(cls) -> "GenericInstructParser":
+        return GenericInstructParser("instruction", "response", "context")
 
     @classmethod
     def gpt4all(cls) -> "GenericInstructParser":

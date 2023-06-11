@@ -40,6 +40,27 @@ def coalesce(chunks: List[FormattedChunk]) -> List[FormattedChunk]:
 
 
 @dataclass
+class TokenizationOptions:
+    """Determines specific behavior when tokenizing formatted prompts.
+
+    :cvar generate_labels: If True, generate labels for each token indicating if
+        the token is from an input chunk, defaults to True.
+    :cvar input_token_id: The integer to use as the token label for input chunks,
+        defaults to -100.
+    :cvar add_bos: If True, a BOS (Beginning of String) token is added at the start
+        of the first chunk, defaults to True.
+    :cvar eos_after_output: If True, an EOS (End of String) token is added after
+        each output chunk in the labels, but not the input, used as a learning
+        signal for the model, defaults to False.
+    """
+
+    generate_labels: bool = True
+    input_token_id: int = -100
+    add_bos: bool = True
+    eos_after_output: bool = False
+
+
+@dataclass
 class FormatResult:
     """Represents the result of a prompt formatting operation."""
 
@@ -71,10 +92,7 @@ class FormatResult:
     def to_tokens(
         self,
         tokenizer: "transformers.PreTrainedTokenizerBase",
-        generate_labels: bool = True,
-        input_token_id: int = -100,
-        add_bos: bool = True,
-        eos_after_output: bool = False,
+        options: TokenizationOptions = TokenizationOptions(),
     ) -> Dict[str, "torch.Tensor"]:
         """Tokenize the chunks of text using the provided tokenizer and return a
         dictionary with the tokenized input, attention mask, and labels (if requested).
@@ -94,15 +112,6 @@ class FormatResult:
 
         :param tokenizer: An instance of transformers.PreTrainedTokenizerBase used to
             tokenize text.
-        :param generate_labels: If True, generate labels for each token indicating if
-            the token is from an input chunk, defaults to True.
-        :param input_token_id: The integer to use as the token label for input chunks,
-            defaults to -100.
-        :param add_bos: If True, a BOS (Beginning of String) token is added at the start
-            of the first chunk, defaults to True.
-        :param eos_after_output: If True, an EOS (End of String) token is added after
-            each output chunk in the labels, but not the input, used as a learning
-            signal for the model, defaults to False.
         :return: A dictionary containing 'input_ids' and 'attention_mask' for each
                 token, and 'labels' for each token if generate_labels is True.
         """
@@ -113,7 +122,7 @@ class FormatResult:
             "attention_mask": [],
         }
 
-        if generate_labels:
+        if options.generate_labels:
             res["labels"] = []
 
         last_was_output = False
@@ -128,24 +137,28 @@ class FormatResult:
                 tokenized[key] = tokenized[key].squeeze(0)
 
             if tokenized["input_ids"][0] == tokenizer.bos_token_id and (
-                i > 0 or not add_bos
+                i > 0 or not options.add_bos
             ):
                 # strip BOS token from all but the first chunk
                 tokenized["input_ids"] = tokenized["input_ids"][1:]
                 tokenized["attention_mask"] = tokenized["attention_mask"][1:]
 
-            for key in ("input_ids", "attention_mask"):
-                res[key].append(tokenized[key])
-
-            if generate_labels:
+            if options.generate_labels:
                 labels = tokenized["input_ids"]
                 if chunk.is_input:
                     labels = torch.ones_like(labels)
-                    labels *= input_token_id
-                    if eos_after_output and last_was_output:
+                    labels *= options.input_token_id
+                    if (
+                        options.eos_after_output
+                        and last_was_output
+                        and res["input_ids"][-1] != tokenizer.eos_token_id
+                    ):
                         labels[0] = tokenizer.eos_token_id
 
                 res["labels"].append(labels)
+
+            for key in ("input_ids", "attention_mask"):
+                res[key].append(tokenized[key])
 
             last_was_output = not chunk.is_input
 
@@ -355,6 +368,14 @@ class ChatPromptFormatter(AbstractPromptFormatter):
         )
 
     @classmethod
+    def metharme(cls):
+        return cls(
+            user_wrapper=WrapperStrings("<|user|>"),
+            model_wrapper=WrapperStrings("<|model|>", "{eos_token}"),
+            system_wrapper=WrapperStrings("<|system|>"),
+        )
+
+    @classmethod
     def bluemoon(cls) -> "ChatPromptFormatter":
         return cls(
             system_prompt=(
@@ -394,3 +415,5 @@ def get_formatter(name: str):
         return ChatPromptFormatter.chatml()
     elif name == "pygmalion":
         return ChatPromptFormatter.pygmalion()
+    elif name == "metharme":
+        return ChatPromptFormatter.metharme()
