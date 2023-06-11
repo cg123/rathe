@@ -17,6 +17,7 @@ class DataPipeline:
     formatter: AbstractPromptFormatter
     tokenizer: PreTrainedTokenizerBase
     options: TokenizationOptions = TokenizationOptions()
+    batched: bool = False
 
     def process_single(self, example: Dict) -> Dict:
         """Process a single example."""
@@ -37,7 +38,7 @@ class DataPipeline:
                 batch_size = len(examples[key])
             break
 
-        if batch_size is None:
+        if (not self.batched) or batch_size is None:
             return self.process_single(examples)
 
         res = {}
