@@ -151,7 +151,7 @@ class FormatResult:
                     if (
                         options.eos_after_output
                         and last_was_output
-                        and res["input_ids"][-1] != tokenizer.eos_token_id
+                        and res["input_ids"][-1][-1] != tokenizer.eos_token_id
                     ):
                         labels[0] = tokenizer.eos_token_id
 
@@ -339,12 +339,14 @@ class ChatPromptFormatter(AbstractPromptFormatter):
                 system_prompt="A chat between a human and an assistant.\n\n",
                 user_wrapper=WrapperStrings("### Human:\n", "\n"),
                 model_wrapper=WrapperStrings("### Assistant:\n", "\n"),
+                system_wrapper=WrapperStrings(suffix="\n"),
                 suffix="{eos_token}",
             )
         elif version == "1.1":
             return cls(
                 user_wrapper=WrapperStrings("USER: ", "\n"),
                 model_wrapper=WrapperStrings("ASSISTANT: ", "\n"),
+                system_wrapper=WrapperStrings(suffix="\n"),
                 suffix="{eos_token}",
             )
         else:
