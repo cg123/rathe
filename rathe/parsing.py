@@ -218,5 +218,7 @@ def get_parser(type_: str) -> AbstractPromptParser:
         )
     elif type_ == "summarizetldr":
         return GenericInstructParser.tldr()
+    elif type_ == "wikitext_document":
+        return CompletionParser(key="page")
     else:
         raise RuntimeError(f"Unknown parser type: {type_}")

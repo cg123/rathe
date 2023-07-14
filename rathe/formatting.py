@@ -373,7 +373,7 @@ class ChatPromptFormatter(AbstractPromptFormatter):
     def metharme(cls):
         return cls(
             user_wrapper=WrapperStrings("<|user|>"),
-            model_wrapper=WrapperStrings("<|model|>", "{eos_token}"),
+            model_wrapper=WrapperStrings("<|model|>"),
             system_wrapper=WrapperStrings("<|system|>"),
         )
 
