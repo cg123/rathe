@@ -4,6 +4,8 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from rathe.prompt import Prompt
+
 from .prompt import ChatMessage, ChatPrompt, InstructPrompt, MessageSender, Prompt
 
 
@@ -189,6 +191,21 @@ class CompletionParser(AbstractPromptParser):
         return prompt[self.key]
 
 
+class DolphinParser(AbstractPromptParser):
+    """Parser for Eric Hartford's dolphin dataset.
+
+    Parses to a ChatPrompt including a system message."""
+
+    def parse(self, prompt: Dict[str, Any]) -> Prompt:
+        messages = [
+            ChatMessage(MessageSender.human, prompt["input"]),
+            ChatMessage(MessageSender.model, prompt["output"]),
+        ]
+        if prompt["instruction"]:
+            messages.insert(0, ChatMessage(MessageSender.system, prompt["instruction"]))
+        return ChatPrompt(messages)
+
+
 def get_parser(type_: str) -> AbstractPromptParser:
     if type_ == "alpaca":
         return GenericInstructParser.alpaca()
@@ -220,5 +237,7 @@ def get_parser(type_: str) -> AbstractPromptParser:
         return GenericInstructParser.tldr()
     elif type_ == "wikitext_document":
         return CompletionParser(key="page")
+    elif type_ == "dolphin":
+        return DolphinParser()
     else:
         raise RuntimeError(f"Unknown parser type: {type_}")
