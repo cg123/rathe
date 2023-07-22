@@ -401,6 +401,26 @@ class ChatPromptFormatter(AbstractPromptFormatter):
             system_wrapper=WrapperStrings("<|im_start|>system\n", "<|im_end|>\n"),
         )
 
+    @classmethod
+    def llama_economic(cls) -> "ChatPromptFormatter":
+        """
+        Prompt format that uses only three tokens per message.
+
+        '▁***', ':', 'Query', 'Response', and 'System' are single tokens, and
+        always will be those same single tokens when using this format. Vicuna's
+        standard USER/ASSISTANT prompt has some properties that make it
+        possibly harder to learn:
+        * USER is a single token (11889) when not prefixed with a space or BOS.
+          Otherwise, it is a different two-token representation: (3148, 1001)
+        * ASSISTANT has more tokenizations than I care to count, with a minimum
+          of three tokens and usually four.
+        """
+        return cls(
+            user_wrapper=WrapperStrings(" ***Query:", ""),
+            model_wrapper=WrapperStrings(" ***Response: ", ""),
+            system_wrapper=WrapperStrings(" ***System: ", ""),
+            suffix="{eos_token}",)
+
 
 def get_formatter(name: str):
     if name == "alpaca":
@@ -419,3 +439,5 @@ def get_formatter(name: str):
         return ChatPromptFormatter.pygmalion()
     elif name == "metharme":
         return ChatPromptFormatter.metharme()
+    elif name == "llama_economic":
+        return ChatPromptFormatter.llama_economic()
