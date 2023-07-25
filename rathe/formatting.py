@@ -417,8 +417,8 @@ class ChatPromptFormatter(AbstractPromptFormatter):
         """
         return cls(
             user_wrapper=WrapperStrings(" ***Query:", ""),
-            model_wrapper=WrapperStrings(" ***Response: ", ""),
-            system_wrapper=WrapperStrings(" ***System: ", ""),
+            model_wrapper=WrapperStrings(" ***Response:", ""),
+            system_wrapper=WrapperStrings(" ***System:", ""),
             suffix="{eos_token}",)
 
 
