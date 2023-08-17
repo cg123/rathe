@@ -216,9 +216,15 @@ class AlpacaPromptFormatter(AbstractPromptFormatter):
         "appropriately completes the request.\n\n"
     )
 
-    instruction_wrap = WrapperStrings("### Instruction:\n", "\n\n")
-    input_wrap = WrapperStrings("### Input:\n", "\n\n")
-    output_wrap = WrapperStrings("### Response:\n")
+    instruction_wrap: WrapperStrings = field(
+        default_factory=lambda: WrapperStrings("### Instruction:\n", "\n\n")
+    )
+    input_wrap: WrapperStrings = field(
+        default_factory=lambda: WrapperStrings("### Input:\n", "\n\n")
+    )
+    output_wrap: WrapperStrings = field(
+        default_factory=lambda: WrapperStrings("### Response:\n")
+    )
 
     def format(self, prompt: Prompt, special_tokens: Dict[str, str]) -> FormatResult:
         res = FormatResult()
@@ -285,9 +291,9 @@ class ChatPromptFormatter(AbstractPromptFormatter):
     """
 
     system_prompt: str = ""
-    user_wrapper: WrapperStrings = WrapperStrings()
-    model_wrapper: WrapperStrings = WrapperStrings()
-    system_wrapper: WrapperStrings = WrapperStrings()
+    user_wrapper: WrapperStrings = field(default_factory=WrapperStrings)
+    model_wrapper: WrapperStrings = field(default_factory=WrapperStrings)
+    system_wrapper: WrapperStrings = field(default_factory=WrapperStrings)
     suffix: str = ""
 
     def format(self, prompt: Prompt, special_tokens: Dict[str, str]) -> FormatResult:
@@ -419,7 +425,8 @@ class ChatPromptFormatter(AbstractPromptFormatter):
             user_wrapper=WrapperStrings(" ***Query:", ""),
             model_wrapper=WrapperStrings(" ***Response:", ""),
             system_wrapper=WrapperStrings(" ***System:", ""),
-            suffix="{eos_token}",)
+            suffix="{eos_token}",
+        )
 
 
 def get_formatter(name: str):

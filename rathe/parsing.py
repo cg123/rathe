@@ -4,8 +4,6 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from rathe.prompt import Prompt
-
 from .prompt import ChatMessage, ChatPrompt, InstructPrompt, MessageSender, Prompt
 
 

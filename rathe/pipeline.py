@@ -1,7 +1,8 @@
-from dataclasses import dataclass
-from typing import Dict
+from dataclasses import dataclass, field
+from typing import Callable, Dict, Optional
 from .parsing import AbstractPromptParser
 from .formatting import AbstractPromptFormatter, TokenizationOptions
+from .prompt import Prompt
 from transformers import PreTrainedTokenizerBase
 
 
@@ -16,14 +17,16 @@ class DataPipeline:
     parser: AbstractPromptParser
     formatter: AbstractPromptFormatter
     tokenizer: PreTrainedTokenizerBase
-    options: TokenizationOptions = TokenizationOptions()
+    options: TokenizationOptions = field(default_factory=TokenizationOptions)
     batched: bool = False
+    transform: Optional[Callable[[Prompt], Prompt]] = None
 
     def process_single(self, example: Dict) -> Dict:
         """Process a single example."""
-        formatted = self.formatter.format(
-            self.parser.parse(example), self.tokenizer.special_tokens_map
-        )
+        prompt = self.parser.parse(example)
+        if self.transform:
+            prompt = self.transform(prompt)
+        formatted = self.formatter.format(prompt, self.tokenizer.special_tokens_map)
         return formatted.to_tokens(self.tokenizer, options=self.options)
 
     def __call__(self, examples: Dict) -> Dict:
