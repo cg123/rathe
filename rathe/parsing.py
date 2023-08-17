@@ -204,6 +204,21 @@ class DolphinParser(AbstractPromptParser):
         return ChatPrompt(messages)
 
 
+class OpenOrcaParser(AbstractPromptParser):
+    """Parser for OpenOrca dataset."""
+
+    def parse(self, prompt: Dict[str, Any]) -> Prompt:
+        messages = [
+            ChatMessage(MessageSender.human, prompt["question"]),
+            ChatMessage(MessageSender.model, prompt["response"]),
+        ]
+        if prompt["system_prompt"]:
+            messages.insert(
+                0, ChatMessage(MessageSender.system, prompt["system_prompt"])
+            )
+        return ChatPrompt(messages)
+
+
 def get_parser(type_: str) -> AbstractPromptParser:
     if type_ == "alpaca":
         return GenericInstructParser.alpaca()
@@ -237,5 +252,7 @@ def get_parser(type_: str) -> AbstractPromptParser:
         return CompletionParser(key="page")
     elif type_ == "dolphin":
         return DolphinParser()
+    elif type_ == "orca":
+        return OpenOrcaParser()
     else:
         raise RuntimeError(f"Unknown parser type: {type_}")
