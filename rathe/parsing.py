@@ -189,34 +189,44 @@ class CompletionParser(AbstractPromptParser):
         return prompt[self.key]
 
 
-class DolphinParser(AbstractPromptParser):
-    """Parser for Eric Hartford's dolphin dataset.
-
-    Parses to a ChatPrompt including a system message."""
-
-    def parse(self, prompt: Dict[str, Any]) -> Prompt:
-        messages = [
-            ChatMessage(MessageSender.human, prompt["input"]),
-            ChatMessage(MessageSender.model, prompt["output"]),
-        ]
-        if prompt["instruction"]:
-            messages.insert(0, ChatMessage(MessageSender.system, prompt["instruction"]))
-        return ChatPrompt(messages)
-
-
-class OpenOrcaParser(AbstractPromptParser):
+@dataclass
+class OrcaStyleParser(AbstractPromptParser):
     """Parser for OpenOrca dataset."""
 
+    instruction_field: str = "question"
+    output_field: str = "response"
+    system_prompt_field: str = "system_prompt"
+
     def parse(self, prompt: Dict[str, Any]) -> Prompt:
         messages = [
-            ChatMessage(MessageSender.human, prompt["question"]),
-            ChatMessage(MessageSender.model, prompt["response"]),
+            ChatMessage(MessageSender.human, prompt[self.instruction_field]),
+            ChatMessage(MessageSender.model, prompt[self.output_field]),
         ]
-        if prompt["system_prompt"]:
+        if self.system_prompt_field in prompt and prompt[self.system_prompt_field]:
             messages.insert(
-                0, ChatMessage(MessageSender.system, prompt["system_prompt"])
+                0, ChatMessage(MessageSender.system, prompt[self.system_prompt_field])
             )
         return ChatPrompt(messages)
+
+    @classmethod
+    def open_orca(cls) -> AbstractPromptParser:
+        return OrcaStyleParser()
+
+    @classmethod
+    def orca_mini(cls) -> AbstractPromptParser:
+        return OrcaStyleParser(
+            instruction_field="instruction",
+            output_field="output",
+            system_prompt_field="system",
+        )
+
+    @classmethod
+    def dolphin(cls) -> AbstractPromptParser:
+        return OrcaStyleParser(
+            instruction_field="input",
+            output_field="output",
+            system_prompt_field="instruction",
+        )
 
 
 def get_parser(type_: str) -> AbstractPromptParser:
@@ -251,8 +261,12 @@ def get_parser(type_: str) -> AbstractPromptParser:
     elif type_ == "wikitext_document":
         return CompletionParser(key="page")
     elif type_ == "dolphin":
-        return DolphinParser()
-    elif type_ == "orca":
-        return OpenOrcaParser()
+        return OrcaStyleParser.dolphin()
+    elif type_ == "openorca":
+        return OrcaStyleParser.open_orca()
+    elif type_ == "orca_mini":
+        return OrcaStyleParser.orca_mini()
+    elif type_ == "dolly":
+        return GenericInstructParser.dolly()
     else:
         raise RuntimeError(f"Unknown parser type: {type_}")
