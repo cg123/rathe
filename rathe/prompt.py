@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Union
 
+from typing_extensions import TypeAlias
+
 
 class MessageSender(Enum):
     """Enumerated type representing different types of message senders.
@@ -77,15 +79,13 @@ class InstructPrompt:
         )
 
 
-try:
-    from typing import TypeAlias
-except ImportError:
-    # 🙃
-    TypeAlias = type
+@dataclass
+class CompletionPrompt:
+    """A section of raw text to be predicted, optionally with a prefix."""
 
+    completion: str
+    prefix: Optional[str] = None
 
-CompletionPrompt: TypeAlias = str
-"""A section of raw text to be predicted."""
 
 Prompt: TypeAlias = Union[InstructPrompt, ChatPrompt, CompletionPrompt]
 """Represents a value that could be any of the prompt types supported.

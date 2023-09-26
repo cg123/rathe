@@ -1,8 +1,10 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List
-from abc import ABC
+from typing import Dict, List, Optional
 
-from .prompt import CompletionPrompt, InstructPrompt, ChatPrompt, MessageSender, Prompt
+from rathe.conversion import ConversionContext
+
+from .prompt import ChatPrompt, CompletionPrompt, InstructPrompt, MessageSender, Prompt
 
 
 @dataclass
@@ -168,21 +170,34 @@ class FormatResult:
         return res
 
 
-class AbstractPromptFormatter(ABC):
+class PromptFormatter(ABC):
     """An abstract base class for formatting prompts in various formats.
 
     This base class should be inherited by any class meant to format `Prompt` objects
     into the specific format expected by a language model.
     """
 
-    def format(self, prompt: Prompt, special_tokens: Dict[str, str]) -> FormatResult:
+    @abstractmethod
+    def format(
+        self,
+        prompt: Prompt,
+        special_tokens: Dict[str, str],
+        conversion_context: Optional[ConversionContext] = None,
+    ) -> FormatResult:
         """Format a prompt into string chunks, labeled as to input status.
 
         :param prompt: The prompt to format.
         :param special_tokens: A dictionary mapping special token names to their string
                 representations.
+        :param conversion_context: To use if a specific prompt type is needed.
         """
-        raise NotImplementedError()
+        ...
+
+    def _format_completion(self, prompt: Prompt, res: FormatResult):
+        """Format a raw completion prompt."""
+        if prompt.prefix:
+            res.add(prompt.prefix, is_input=True)
+        res.add(prompt.completion, is_input=False)
 
 
 @dataclass
@@ -205,7 +220,7 @@ class WrapperStrings:
 
 
 @dataclass
-class AlpacaPromptFormatter(AbstractPromptFormatter):
+class AlpacaPromptFormatter(PromptFormatter):
     system_prompt: str = (
         "Below is an instruction that describes a task, paired with an input that "
         "provides further context. Write a response that appropriately completes the "
@@ -226,29 +241,29 @@ class AlpacaPromptFormatter(AbstractPromptFormatter):
         default_factory=lambda: WrapperStrings("### Response:\n")
     )
 
-    def format(self, prompt: Prompt, special_tokens: Dict[str, str]) -> FormatResult:
+    def format(
+        self,
+        prompt: Prompt,
+        special_tokens: Dict[str, str],
+        conversion_context: Optional[ConversionContext] = None,
+    ) -> FormatResult:
+        if conversion_context is None:
+            conversion_context = ConversionContext.default()
+
         res = FormatResult()
+        if isinstance(prompt, CompletionPrompt):
+            self._format_completion(prompt, res)
+            return res
 
-        if isinstance(prompt, ChatPrompt) or (
-            isinstance(prompt, InstructPrompt) and prompt.input
-        ):
-            res.add(self.system_prompt, is_input=True)
-        else:
+        use_chat = isinstance(prompt, ChatPrompt) or (
+            conversion_context.can_convert(prompt, ChatPrompt)
+            and not conversion_context.can_convert(prompt, InstructPrompt)
+        )
+
+        if use_chat:
+            prompt = conversion_context.convert(prompt, ChatPrompt)
+
             res.add(self.system_no_input_prompt, is_input=True)
-
-        if isinstance(prompt, InstructPrompt):
-            res.add(
-                self.instruction_wrap.wrap_format(prompt.instruction, **special_tokens),
-                is_input=True,
-            )
-            if prompt.input:
-                res.add(
-                    self.input_wrap.wrap_format(prompt.input, **special_tokens),
-                    is_input=True,
-                )
-
-            res.add(self.output_wrap.wrap_format(prompt.output, **special_tokens))
-        elif isinstance(prompt, ChatPrompt):
             for message in prompt.messages:
                 from_model = False
                 if message.sender == MessageSender.model:
@@ -266,10 +281,24 @@ class AlpacaPromptFormatter(AbstractPromptFormatter):
                     return res.coalesced()
 
                 res.add(f"{message.text}\n", is_input=not from_model)
-        elif isinstance(prompt, CompletionPrompt):
-            res.add(prompt)
         else:
-            raise RuntimeError("Unsupported prompt for AlpacaPromptFormatter", prompt)
+            prompt = conversion_context.convert(prompt, InstructPrompt)
+
+            res.add(
+                self.system_prompt if prompt.input else self.system_no_input_prompt,
+                is_input=True,
+            )
+            res.add(
+                self.instruction_wrap.wrap_format(prompt.instruction, **special_tokens),
+                is_input=True,
+            )
+            if prompt.input:
+                res.add(
+                    self.input_wrap.wrap_format(prompt.input, **special_tokens),
+                    is_input=True,
+                )
+
+            res.add(self.output_wrap.wrap_format(prompt.output, **special_tokens))
 
         return res.coalesced()
 
@@ -283,7 +312,7 @@ class AlpacaPromptFormatter(AbstractPromptFormatter):
 
 
 @dataclass
-class ChatPromptFormatter(AbstractPromptFormatter):
+class ChatPromptFormatter(PromptFormatter):
     """A generic formatter for chat prompts.
 
     Applies a string prefix and suffix to messages, based on the sender. Also allows for
@@ -296,13 +325,21 @@ class ChatPromptFormatter(AbstractPromptFormatter):
     system_wrapper: WrapperStrings = field(default_factory=WrapperStrings)
     suffix: str = ""
 
-    def format(self, prompt: Prompt, special_tokens: Dict[str, str]) -> FormatResult:
+    def format(
+        self,
+        prompt: Prompt,
+        special_tokens: Dict[str, str],
+        conversion_context: Optional[ConversionContext] = None,
+    ) -> FormatResult:
+        if conversion_context is None:
+            conversion_context = ConversionContext.default()
+
         res = FormatResult()
         if isinstance(prompt, CompletionPrompt):
-            res.add(prompt)
+            self._format_completion(prompt, res)
             return res
         else:
-            prompt = prompt.as_chat()
+            prompt = conversion_context.convert(prompt, ChatPrompt)
 
         res.add(self.system_prompt.format(**special_tokens), is_input=True)
         for message in prompt.messages:

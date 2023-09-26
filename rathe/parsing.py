@@ -1,18 +1,20 @@
 """Routines for parsing common LLM dataset formats into Prompt objects."""
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from .prompt import ChatMessage, ChatPrompt, InstructPrompt, MessageSender, Prompt
+from .rp import RoleplayPrompt, RoleplayCharacter
 
 
-class AbstractPromptParser(ABC):
+class PromptParser(ABC):
     """An abstract base class for parsing prompts from various formats."""
 
+    @abstractmethod
     def parse(self, prompt: Dict[str, Any]) -> Prompt:
         """Parse a dictionary into a Prompt."""
-        raise NotImplementedError()
+        ...
 
 
 class FieldMapping:
@@ -67,7 +69,7 @@ class FieldMapping:
 IntoFieldMapping = Union[str, List[str], FieldMapping]
 
 
-class GenericInstructParser(AbstractPromptParser):
+class GenericInstructParser(PromptParser):
     """Parser for instruction datasets.
 
     Handles any dataset consisting of either two or three columns, with a textual
@@ -150,7 +152,7 @@ class GenericInstructParser(AbstractPromptParser):
 
 
 @dataclass
-class ShareGPTParser(AbstractPromptParser):
+class ShareGPTParser(PromptParser):
     """Parser for conversation-style datasets.
 
     :cvar key: The key in the source dictionary that contains the conversation data.
@@ -176,7 +178,7 @@ class ShareGPTParser(AbstractPromptParser):
 
 
 @dataclass
-class CompletionParser(AbstractPromptParser):
+class CompletionParser(PromptParser):
     """A parser for raw text completion datasets.
 
     :cvar key: The key in the source dictionary that contains the raw text data.
@@ -190,7 +192,7 @@ class CompletionParser(AbstractPromptParser):
 
 
 @dataclass
-class OrcaStyleParser(AbstractPromptParser):
+class OrcaStyleParser(PromptParser):
     """Parser for OpenOrca dataset."""
 
     instruction_field: str = "question"
@@ -209,11 +211,11 @@ class OrcaStyleParser(AbstractPromptParser):
         return ChatPrompt(messages)
 
     @classmethod
-    def open_orca(cls) -> AbstractPromptParser:
+    def open_orca(cls) -> PromptParser:
         return OrcaStyleParser()
 
     @classmethod
-    def orca_mini(cls) -> AbstractPromptParser:
+    def orca_mini(cls) -> PromptParser:
         return OrcaStyleParser(
             instruction_field="instruction",
             output_field="output",
@@ -221,7 +223,7 @@ class OrcaStyleParser(AbstractPromptParser):
         )
 
     @classmethod
-    def dolphin(cls) -> AbstractPromptParser:
+    def dolphin(cls) -> PromptParser:
         return OrcaStyleParser(
             instruction_field="input",
             output_field="output",
@@ -229,7 +231,35 @@ class OrcaStyleParser(AbstractPromptParser):
         )
 
 
-def get_parser(type_: str) -> AbstractPromptParser:
+@dataclass
+class RoleplayForumParser(PromptParser):
+    name_key: str = ("username",)
+    bio_key: str = ("bio",)
+    output_key: str = ("reply",)
+
+    history_key: str = ("context",)
+    message_sender_key: str = ("username",)
+    message_text_key: str = ("text",)
+
+    def parse(self, prompt: Dict[str, Any]) -> Prompt:
+        bot_char = RoleplayCharacter(prompt[self.name_key], prompt[self.bio_key])
+        output = prompt[self.output_key]
+
+        messages = []
+        for msg in prompt[self.history_key]:
+            sender_name = msg[self.message_sender_key]
+            sender = (
+                MessageSender.model
+                if sender_name == bot_char.name
+                else MessageSender.human
+            )
+            messages.append(ChatMessage(sender, text=msg[self.message_text_key]))
+        messages.append(ChatMessage(MessageSender.model, output))
+
+        return RoleplayPrompt(messages, bot_char)
+
+
+def get_parser(type_: str) -> PromptParser:
     if type_ == "alpaca":
         return GenericInstructParser.alpaca()
     elif type_ == "sharegpt":
@@ -268,5 +298,7 @@ def get_parser(type_: str) -> AbstractPromptParser:
         return OrcaStyleParser.orca_mini()
     elif type_ == "dolly":
         return GenericInstructParser.dolly()
+    elif type_ == "rp_forum":
+        return RoleplayForumParser()
     else:
         raise RuntimeError(f"Unknown parser type: {type_}")

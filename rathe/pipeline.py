@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Optional
-from .parsing import AbstractPromptParser
-from .formatting import AbstractPromptFormatter, TokenizationOptions
-from .prompt import Prompt
+
 from transformers import PreTrainedTokenizerBase
+
+from .formatting import PromptFormatter, TokenizationOptions
+from .parsing import PromptParser
+from .prompt import Prompt
 
 
 @dataclass
@@ -14,8 +16,8 @@ class DataPipeline:
     into tokenized examples to feed to a language model.
     """
 
-    parser: AbstractPromptParser
-    formatter: AbstractPromptFormatter
+    parser: PromptParser
+    formatter: PromptFormatter
     tokenizer: PreTrainedTokenizerBase
     options: TokenizationOptions = field(default_factory=TokenizationOptions)
     batched: bool = False
