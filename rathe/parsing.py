@@ -234,13 +234,13 @@ class OrcaStyleParser(PromptParser):
 
 @dataclass
 class RoleplayForumParser(PromptParser):
-    name_key: str = ("username",)
-    bio_key: str = ("bio",)
-    output_key: str = ("reply",)
+    name_key: str = "username"
+    bio_key: str = "bio"
+    output_key: str = "reply"
 
-    history_key: str = ("context",)
-    message_sender_key: str = ("username",)
-    message_text_key: str = ("text",)
+    history_key: str = "context"
+    message_sender_key: str = "username"
+    message_text_key: str = "text"
 
     def parse(self, prompt: Dict[str, Any]) -> Prompt:
         bot_char = RoleplayCharacter(prompt[self.name_key], prompt[self.bio_key])
@@ -338,5 +338,7 @@ def get_parser(type_: str) -> PromptParser:
         return GenericInstructParser.dolly()
     elif type_ == "rp_forum":
         return RoleplayForumParser()
+    elif type_ == "pippa":
+        return PippaParser()
     else:
         raise RuntimeError(f"Unknown parser type: {type_}")
