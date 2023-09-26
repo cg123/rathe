@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import re
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from .prompt import ChatMessage, ChatPrompt, InstructPrompt, MessageSender, Prompt
@@ -256,6 +257,43 @@ class RoleplayForumParser(PromptParser):
             messages.append(ChatMessage(sender, text=msg[self.message_text_key]))
         messages.append(ChatMessage(MessageSender.model, output))
 
+        return RoleplayPrompt(messages, bot_char)
+
+
+class PippaParser(PromptParser):
+    def _sub_names(self, msg: str, user_name: str, char_name: str) -> str:
+        return msg.replace("{{char}}", char_name).replace("{{user}}", user_name)
+
+    def _parse_defs(self, definitions: str) -> List[ChatPrompt]:
+        if not definitions.strip():
+            return []
+
+        msg_start_re = re.compile("({{random_user_([0-9]+)}}|{{char}}):")
+        raw_examples = definitions.split("END_OF_DIALOG")
+        examples = []
+        for raw_ex in raw_examples:
+            chunks = msg_start_re.split(raw_ex)
+            messages = [
+                ChatMessage(
+                    MessageSender.model if c == "{{char}}" else MessageSender.human,
+                    text=text.strip(),
+                )
+                for (c, text) in zip(chunks[::1], chunks[1::2])
+            ]
+            examples.append(ChatPrompt(messages))
+        return examples
+
+    def parse(self, prompt: Dict[str, Any]) -> Prompt:
+        bot_char = RoleplayCharacter(
+            prompt["bot_name"],
+            prompt["bot_description"],
+            example_chats=self._parse_defs(prompt["bot_definitions"]),
+        )
+        messages = []
+        for msg in prompt["conversation"]:
+            sender = MessageSender.human if msg["is_human"] else MessageSender.model
+            text = msg["message"]
+            messages.append(ChatMessage(sender, text))
         return RoleplayPrompt(messages, bot_char)
 
 
