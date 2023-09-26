@@ -1,8 +1,7 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from rathe.conversion import PromptConverter
-from rathe.prompt import ChatMessage, ChatPrompt, MessageSender
-from rathe.parsing import PromptParser
+from rathe.prompt import ChatMessage, ChatPrompt, MessageSender, Prompt
 
 
 @dataclass
@@ -36,6 +35,3 @@ class RoleplayToChat(PromptConverter[RoleplayPrompt, ChatPrompt]):
             messages=[ChatMessage(MessageSender.system, system_message)]
             + prompt.messages
         )
-
-
-class PippaParser(PromptParser)
