@@ -294,9 +294,8 @@ class PippaParser(PromptParser):
             example_chats=self._parse_defs(prompt["bot_definitions"]),
         )
         messages = []
-        for msg in prompt["conversation"]:
-            sender = MessageSender.human if msg["is_human"] else MessageSender.model
-            text = msg["message"]
+        for is_human, text in zip(prompt["conversation"]["is_human"], prompt["conversation"]["message"]):
+            sender = MessageSender.human if is_human else MessageSender.model
             messages.append(ChatMessage(sender, text))
         return RoleplayPrompt(messages, bot_char)
 
