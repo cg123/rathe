@@ -272,11 +272,11 @@ class PippaParser(PromptParser):
         if not definitions.strip():
             return []
 
-        msg_start_re = re.compile("({{random_user_([0-9]+)}}|{{char}}):")
+        msg_start_re =  re.compile(r"({{random_user_[0-9]+}}|{{user}}|{{char}}):")
         raw_examples = definitions.split("END_OF_DIALOG")
         examples = []
         for raw_ex in raw_examples:
-            chunks = msg_start_re.split(raw_ex)
+            chunks = msg_start_re.split(raw_ex)[1:]
             messages = [
                 ChatMessage(
                     MessageSender.model if c == "{{char}}" else MessageSender.human,
