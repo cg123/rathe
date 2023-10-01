@@ -237,7 +237,8 @@ class OrcaStyleParser(PromptParser):
 
 @dataclass
 class RoleplayForumParser(PromptParser):
-    name_key: str = "username"
+    username_key: str = "username"
+    name_key: str = "char_name"
     bio_key: str = "bio"
     output_key: str = "reply"
 
@@ -254,7 +255,7 @@ class RoleplayForumParser(PromptParser):
             sender_name = msg[self.message_sender_key]
             sender = (
                 MessageSender.model
-                if sender_name == bot_char.name
+                if sender_name == prompt[self.username_key]
                 else MessageSender.human
             )
             messages.append(ChatMessage(sender, text=msg[self.message_text_key]))
