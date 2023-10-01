@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import re
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from .prompt import ChatMessage, ChatPrompt, InstructPrompt, MessageSender, Prompt
+from .prompt import ChatMessage, ChatPrompt, InstructPrompt, MessageSender, Prompt, CompletionPrompt
 from .rp import RoleplayPrompt, RoleplayCharacter
 
 
@@ -187,9 +187,12 @@ class CompletionParser(PromptParser):
     """
 
     key: str = "text"
+    prefix_key: Optional[str] = None
 
     def parse(self, prompt: Dict[str, Any]) -> Prompt:
-        return prompt[self.key]
+        text = prompt[self.key]
+        prefix = prompt[self.prefix_key] if self.prefix_key else None
+        return CompletionPrompt(text, prefix=prefix)
 
 
 @dataclass

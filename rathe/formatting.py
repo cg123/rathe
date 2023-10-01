@@ -485,3 +485,7 @@ def get_formatter(name: str):
         return ChatPromptFormatter.metharme()
     elif name == "llama_economic":
         return ChatPromptFormatter.llama_economic()
+    elif name == "guise":
+        import rathe.rp
+
+        return rathe.rp.GuiseFormatter()

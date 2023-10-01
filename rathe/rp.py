@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from rathe.conversion import PromptConverter
+from rathe.conversion import ConversionContext, PromptConverter
+from rathe.formatting import FormatResult, PromptFormatter
 from rathe.prompt import ChatMessage, ChatPrompt, MessageSender, Prompt
 
 
@@ -35,3 +36,36 @@ class RoleplayToChat(PromptConverter[RoleplayPrompt, ChatPrompt]):
             messages=[ChatMessage(MessageSender.system, system_message)]
             + prompt.messages
         )
+
+
+@dataclass
+class GuiseFormatter(PromptFormatter):
+    def format(
+        self,
+        prompt: Prompt,
+        special_tokens: Dict[str, str],
+        conversion_context: ConversionContext | None = None,
+    ) -> FormatResult:
+        prompt: RoleplayPrompt = conversion_context.convert(prompt, RoleplayPrompt)
+        res = FormatResult()
+
+        res.add(f"<|character|>{prompt.model_char.name}", is_input=True)
+        if prompt.model_char.description:
+            res.add(f"<|bio|>{prompt.model_char.description}", is_input=True)
+
+        if prompt.model_char.example_chats:
+            res.add("<|examples|>", is_input=True)
+            for chat in prompt.model_char.example_chats:
+                for msg in chat.messages:
+                    tag = "<|user|>" if msg.sender == MessageSender.human else "<|bot|>"
+                    res.add(f"{tag}{msg.text}", is_input=True)
+                res.add("<|eoc|>", is_input=True)
+
+        res.add("<|history|>")
+        for msg in prompt.messages[:-1]:
+            tag = "<|user|>" if msg.sender == MessageSender.human else "<|bot|>"
+            res.add(f"{tag}{msg.text}", is_input=True)
+        res.add("<|response|>", is_input=True)
+
+        res.add(prompt.messages[-1].text, is_input=False)
+        return res
