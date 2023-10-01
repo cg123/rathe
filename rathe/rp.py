@@ -44,8 +44,11 @@ class GuiseFormatter(PromptFormatter):
         self,
         prompt: Prompt,
         special_tokens: Dict[str, str],
-        conversion_context: ConversionContext | None = None,
+        conversion_context: Optional[ConversionContext] = None,
     ) -> FormatResult:
+        if conversion_context is None:
+            conversion_context = ConversionContext.default()
+
         prompt: RoleplayPrompt = conversion_context.convert(prompt, RoleplayPrompt)
         res = FormatResult()
 
