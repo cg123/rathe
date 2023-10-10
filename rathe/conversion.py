@@ -22,11 +22,11 @@ class InstructToChat(PromptConverter[InstructPrompt, ChatPrompt]):
     def convert(self, prompt: InstructPrompt) -> ChatPrompt:
         message = prompt.instruction
         if prompt.input:
-            message = f"{message}\n{self.input}"
+            message = f"{message}\n{prompt.input}"
         return ChatPrompt(
             messages=[
                 ChatMessage(MessageSender.human, message),
-                ChatMessage(MessageSender.model, self.output),
+                ChatMessage(MessageSender.model, prompt.output),
             ]
         )
 
@@ -35,7 +35,7 @@ class SingleTurnChatToInstruct(PromptConverter[ChatPrompt, InstructPrompt]):
     def convert(self, prompt: ChatPrompt) -> InstructPrompt:
         if not self.can_convert(prompt):
             raise RuntimeError("Can't convert this chat prompt to an instruct prompt")
-        return InstructPrompt(prompt.messages[0].text, self.messages[1].text)
+        return InstructPrompt(prompt.messages[0].text, prompt.messages[1].text)
 
     def can_convert(self, prompt: ChatPrompt) -> bool:
         return (
