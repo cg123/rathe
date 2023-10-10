@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+import random
+from typing import Any, Dict, List, Optional, Tuple
 from rathe.conversion import ConversionContext, PromptConverter
-from rathe.formatting import FormatResult, PromptFormatter
+from rathe.formatting import ChatPromptFormatter, FormatResult, PromptFormatter
 from rathe.prompt import ChatMessage, ChatPrompt, MessageSender, Prompt
 
 
@@ -13,10 +14,16 @@ class RoleplayCharacter:
 
 
 @dataclass
+class RoleplayMessage:
+    sender: str
+    text: str
+
+
+@dataclass
 class RoleplayPrompt:
     """A chat prompt augmented with a scenario and character descriptions."""
 
-    messages: List[ChatMessage]
+    messages: List[RoleplayMessage]
     model_char: RoleplayCharacter
     user_char: Optional[RoleplayCharacter] = None
     context: Optional[str] = None
@@ -28,18 +35,99 @@ class RoleplayToChat(PromptConverter[RoleplayPrompt, ChatPrompt]):
         "You are roleplaying as {bot.name}.\n{bot.name}'s persona:\n{bot.description}"
     )
 
+    def _convert_message(
+        self, msg: RoleplayMessage, prompt: RoleplayPrompt
+    ) -> ChatMessage:
+        if msg.sender == prompt.model_char.name:
+            return ChatMessage(MessageSender.model, msg.text)
+        sender_prefix = ""
+        if msg.sender in ["", "user", "human"]:
+            if prompt.user_char:
+                sender_prefix = prompt.user_char.name + ": "
+            else:
+                sender_prefix = ""
+        else:
+            sender_prefix = msg.sender + ": "
+
+        return ChatMessage(MessageSender.human, sender_prefix + msg.text)
+
     def convert(self, prompt: RoleplayPrompt) -> ChatPrompt:
         system_message = self.system_format.format(
             bot=prompt.model_char, human=prompt.user_char, context=prompt.context
         )
         return ChatPrompt(
             messages=[ChatMessage(MessageSender.system, system_message)]
-            + prompt.messages
+            + [
+                self._convert_message(msg, prompt.model_char.name)
+                for msg in prompt.messages
+            ]
         )
 
 
 @dataclass
-class GuiseFormatter(PromptFormatter):
+class LengthRangeDescriptor:
+    min_words: int
+    max_words: int
+    text: str
+
+
+DEFAULT_LENGTH_DESCRIPTORS = [
+    LengthRangeDescriptor(*tup)
+    for tup in [
+        (0, 30, "microscopic"),  # 3 tokens
+        (0, 85, "tiny"),
+        (40, 80, "quite short"),  # 2 tokens
+        (50, 110, "concise"),  # 2 tokens
+        (85, 130, "short"),
+        (100, 160, "brief"),
+        (130, 180, "medium"),
+        (160, 220, "moderate"),  # 2 tokens
+        (150, 200, "somewhat long"),  # 2 tokens
+        (180, 240, "long"),
+        (210, 280, "lengthy"),  # 2 tokens
+        (220, 290, "extended"),
+        (240, 305, "very long"),  # 2 tokens
+        (305, 390, "humongous"),  # 3 tokens
+        (350, 410, "hundreds of words"),  # 3 tokens
+        (360, 450, "comprehensive"),  # 2 tokens
+        (390, 500, "extremely long"),  # 2 tokens
+    ]
+]
+
+
+def describe_length(text: str, probability: float = 1.0) -> Optional[str]:
+    word_count = len(text.split())
+
+    if probability < 1 and random.random() > probability:
+        return None
+
+    applicable = [
+        d
+        for d in DEFAULT_LENGTH_DESCRIPTORS
+        if word_count >= d.min_words and word_count < d.max_words
+    ]
+    if not applicable:
+        return None
+
+    return random.choice(applicable).text
+
+
+@dataclass
+class ChatMlRpFormatter(PromptFormatter):
+    inner: ChatPromptFormatter
+    system_format: str = (
+        "Enter roleplay mode. You are {model_char.name}.\n{model_char.description}"
+    )
+    length_annotate_prob: float = 0.5
+
+    def _message_wrap(self, sender: str, text: str) -> str:
+        return f"<|im_start|>{sender}\n{text}<|im_end|>\n"
+
+    def _ex_sender_name(self, msg: ChatMessage, bot_name: str) -> str:
+        if msg.sender == MessageSender.human:
+            return "User"
+        return bot_name
+
     def format(
         self,
         prompt: Prompt,
@@ -49,26 +137,40 @@ class GuiseFormatter(PromptFormatter):
         if conversion_context is None:
             conversion_context = ConversionContext.default()
 
-        prompt: RoleplayPrompt = conversion_context.convert(prompt, RoleplayPrompt)
+        if not isinstance(prompt, RoleplayPrompt):
+            return self.inner.format(prompt, special_tokens, conversion_context)
+
         res = FormatResult()
-
-        res.add(f"<|character|>{prompt.model_char.name}", is_input=True)
-        if prompt.model_char.description:
-            res.add(f"<|bio|>{prompt.model_char.description}", is_input=True)
-
+        res.add(
+            self._message_wrap(
+                sender="system",
+                text=self.system_format.format(model_char=prompt.model_char),
+            ),
+            is_input=True,
+        )
         if prompt.model_char.example_chats:
-            res.add("<|examples|>", is_input=True)
-            for chat in prompt.model_char.example_chats:
-                for msg in chat.messages:
-                    tag = "<|user|>" if msg.sender == MessageSender.human else "<|bot|>"
-                    res.add(f"{tag}{msg.text}", is_input=True)
-                res.add("<|eoc|>", is_input=True)
+            for idx, chat in enumerate(prompt.model_char.example_chats):
+                log = "\n".join(
+                    f"{self._ex_sender_name(msg.sender, prompt.model_char.name)}: {msg.text}"
+                    for msg in chat.messages
+                )
+                res.add(
+                    self._message_wrap(
+                        sender="system", text=f"Example session #{idx + 1}:\n{log}"
+                    ),
+                    is_input=True,
+                )
 
-        res.add("<|history|>")
-        for msg in prompt.messages[:-1]:
-            tag = "<|user|>" if msg.sender == MessageSender.human else "<|bot|>"
-            res.add(f"{tag}{msg.text}", is_input=True)
-        res.add("<|response|>", is_input=True)
+        for msg in prompt.messages:
+            sender = msg.sender
+            if self.length_annotate_prob > 0 and sender == prompt.model_char.name:
+                length_text = describe_length(msg.text, self.length_annotate_prob)
+                if length_text:
+                    sender = f"{sender} (Length: {length_text})"
 
-        res.add(prompt.messages[-1].text, is_input=False)
+            res.add(
+                self._message_wrap(sender, msg.text),
+                is_input=msg.sender != prompt.model_char.name,
+            )
+
         return res

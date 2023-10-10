@@ -5,8 +5,15 @@ from dataclasses import dataclass
 import re
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from .prompt import ChatMessage, ChatPrompt, InstructPrompt, MessageSender, Prompt, CompletionPrompt
-from .rp import RoleplayPrompt, RoleplayCharacter
+from .prompt import (
+    ChatMessage,
+    ChatPrompt,
+    InstructPrompt,
+    MessageSender,
+    Prompt,
+    CompletionPrompt,
+)
+from .rp import RoleplayMessage, RoleplayPrompt, RoleplayCharacter
 
 
 class PromptParser(ABC):
@@ -252,14 +259,11 @@ class RoleplayForumParser(PromptParser):
 
         messages = []
         for msg in prompt[self.history_key]:
-            sender_name = msg[self.message_sender_key]
-            sender = (
-                MessageSender.model
-                if sender_name == prompt[self.username_key]
-                else MessageSender.human
+            sender_name = msg[self.name_key] or msg[self.message_sender_key]
+            messages.append(
+                RoleplayMessage(sender_name, text=msg[self.message_text_key])
             )
-            messages.append(ChatMessage(sender, text=msg[self.message_text_key]))
-        messages.append(ChatMessage(MessageSender.model, output))
+        messages.append(RoleplayMessage(bot_char.name, output))
 
         return RoleplayPrompt(messages, bot_char)
 
@@ -272,7 +276,7 @@ class PippaParser(PromptParser):
         if not definitions.strip():
             return []
 
-        msg_start_re =  re.compile(r"({{random_user_[0-9]+}}|{{user}}|{{char}}):")
+        msg_start_re = re.compile(r"({{random_user_[0-9]+}}|{{user}}|{{char}}):")
         raw_examples = definitions.split("END_OF_DIALOG")
         examples = []
         for raw_ex in raw_examples:
@@ -294,7 +298,9 @@ class PippaParser(PromptParser):
             example_chats=self._parse_defs(prompt["bot_definitions"]),
         )
         messages = []
-        for is_human, text in zip(prompt["conversation"]["is_human"], prompt["conversation"]["message"]):
+        for is_human, text in zip(
+            prompt["conversation"]["is_human"], prompt["conversation"]["message"]
+        ):
             sender = MessageSender.human if is_human else MessageSender.model
             messages.append(ChatMessage(sender, text))
         return RoleplayPrompt(messages, bot_char)
