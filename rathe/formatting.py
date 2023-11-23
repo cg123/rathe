@@ -489,3 +489,7 @@ def get_formatter(name: str):
         import rathe.rp
 
         return rathe.rp.GuiseFormatter()
+    elif name == "rpinstruct":
+        import rathe.rp
+
+        return rathe.rp.InstructRpFormatter(AlpacaPromptFormatter())

@@ -1,19 +1,19 @@
 """Routines for parsing common LLM dataset formats into Prompt objects."""
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import re
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from .prompt import (
     ChatMessage,
     ChatPrompt,
+    CompletionPrompt,
     InstructPrompt,
     MessageSender,
     Prompt,
-    CompletionPrompt,
 )
-from .rp import RoleplayMessage, RoleplayPrompt, RoleplayCharacter
+from .rp import RoleplayCharacter, RoleplayMessage, RoleplayPrompt
 
 
 class PromptParser(ABC):

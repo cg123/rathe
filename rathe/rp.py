@@ -1,6 +1,7 @@
-from dataclasses import dataclass, field
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
+
 from rathe.conversion import ConversionContext, PromptConverter
 from rathe.formatting import ChatPromptFormatter, FormatResult, PromptFormatter
 from rathe.prompt import ChatMessage, ChatPrompt, MessageSender, Prompt
@@ -151,7 +152,7 @@ class ChatMlRpFormatter(PromptFormatter):
         if prompt.model_char.example_chats:
             for idx, chat in enumerate(prompt.model_char.example_chats):
                 log = "\n".join(
-                    f"{self._ex_sender_name(msg.sender, prompt.model_char.name)}: {msg.text}"
+                    f"{self._ex_sender_name(msg, prompt.model_char.name)}: {msg.text}"
                     for msg in chat.messages
                 )
                 res.add(
@@ -173,4 +174,79 @@ class ChatMlRpFormatter(PromptFormatter):
                 is_input=msg.sender != prompt.model_char.name,
             )
 
+        return res
+
+
+@dataclass
+class InstructRpFormatter(PromptFormatter):
+    inner: PromptFormatter
+    system_format: str = (
+        "Enter roleplay mode. You are {model_char.name}.\n{model_char.description}\n"
+    )
+    length_annotate_prob: float = 0.5
+
+    def _ex_sender_name(self, msg: ChatMessage, bot_name: str) -> str:
+        if msg.sender == MessageSender.human:
+            return "User"
+        return bot_name
+
+    def format(
+        self,
+        prompt: Prompt,
+        special_tokens: Dict[str, str],
+        conversion_context: Optional[ConversionContext] = None,
+    ) -> FormatResult:
+        if conversion_context is None:
+            conversion_context = ConversionContext.default()
+
+        if not isinstance(prompt, RoleplayPrompt):
+            return self.inner.format(prompt, special_tokens, conversion_context)
+
+        while prompt.messages and prompt.messages[-1].sender != MessageSender.model:
+            prompt.messages.pop(-1)
+
+        instruction = self.system_format.format(model_char=prompt.model_char)
+
+        if prompt.model_char.example_chats:
+            chunks = []
+            for idx, chat in enumerate(prompt.model_char.example_chats):
+                log = "\n".join(
+                    f"{self._ex_sender_name(msg, prompt.model_char.name)}: {msg.text}"
+                    for msg in chat.messages
+                )
+                if not log.strip():
+                    continue
+                chunks.append(f"Example session #{idx + 1}:\n```\n{log}```\n")
+            instruction += "\n".join(chunks)
+
+        res = FormatResult()
+        res.add(
+            f"### Instruction:{chr(10) * random.choice([1, 1, 2])}{instruction}{chr(10) * random.choice([1, 2, 2])}",
+            is_input=True,
+        )
+
+        if prompt.messages[:-1]:
+            res.add(f"### Input:{chr(10) * random.choice([1, 1, 2])}", is_input=True)
+            for msg in prompt.messages[:-1]:
+                sender_name = self._ex_sender_name(msg, prompt.model_char.name)
+                res.add(f"{sender_name}:", is_input=True)
+                res.add(
+                    f"{msg.text}\n",
+                    is_input=msg.sender != prompt.model_char.name,
+                )
+
+        last_msg = prompt.messages[-1]
+        length_suffix = ""
+        if self.length_annotate_prob > 0:
+            length_text = describe_length(last_msg.text, self.length_annotate_prob)
+            if length_text:
+                length_suffix = f" (Length: {length_text})"
+
+        res.add(
+            f"{chr(10) * random.choice([0, 1, 2])}### Response{length_suffix}:{chr(10) * random.choice([1, 1, 2])}",
+            is_input=True,
+        )
+        sender_name = self._ex_sender_name(last_msg, prompt.model_char.name)
+        res.add(f"{sender_name}:", is_input=True)
+        res.add(last_msg.text, is_input=False)
         return res
