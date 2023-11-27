@@ -257,18 +257,45 @@ class RoleplayForumParser(PromptParser):
         bot_char = RoleplayCharacter(prompt[self.name_key], prompt[self.bio_key])
         output = prompt[self.output_key]
 
+        user_name = None
+
         messages = []
         for msg in prompt[self.history_key]:
-            sender_name = msg[self.name_key] or msg[self.message_sender_key]
+            sender_name = msg.get(self.name_key) or msg[self.message_sender_key]
             messages.append(
                 RoleplayMessage(sender_name, text=msg[self.message_text_key])
             )
+            if (
+                user_name is None
+                and sender_name != bot_char.name
+                and sender_name != prompt[self.username_key]
+            ):
+                user_name = sender_name
         messages.append(RoleplayMessage(bot_char.name, output))
 
-        return RoleplayPrompt(messages, bot_char)
+        return RoleplayPrompt(
+            messages,
+            bot_char,
+            user_char=RoleplayCharacter(user_name) if user_name else None,
+        )
+
+
+import wonderwords
+import random
+
+rw = wonderwords.RandomWord()
 
 
 class PippaParser(PromptParser):
+    random_usernames: bool = False
+
+    def get_username(self):
+        if not self.random_usernames:
+            return "User"
+        return rw.word(include_parts_of_speech=["nouns", "adjectives", "verbs"]) + str(
+            random.randrange(99, 10000)
+        )
+
     def _sub_names(self, msg: str, user_name: str, char_name: str) -> str:
         return msg.replace("{{char}}", char_name).replace("{{user}}", user_name)
 
@@ -297,13 +324,19 @@ class PippaParser(PromptParser):
             prompt["bot_description"],
             example_chats=self._parse_defs(prompt["bot_definitions"]),
         )
+        username = self.get_username()
+
         messages = []
         for is_human, text in zip(
             prompt["conversation"]["is_human"], prompt["conversation"]["message"]
         ):
-            sender = MessageSender.human if is_human else MessageSender.model
-            messages.append(ChatMessage(sender, text))
-        return RoleplayPrompt(messages, bot_char)
+            sender = username if is_human else bot_char.name
+            messages.append(
+                RoleplayMessage(sender, self._sub_names(text, username, bot_char.name))
+            )
+        return RoleplayPrompt(
+            messages, bot_char, user_char=RoleplayCharacter(name=username)
+        )
 
 
 def get_parser(type_: str) -> PromptParser:

@@ -205,6 +205,9 @@ class InstructRpFormatter(PromptFormatter):
         while prompt.messages and prompt.messages[-1].sender != MessageSender.model:
             prompt.messages.pop(-1)
 
+        if not prompt.messages:
+            return FormatResult([])
+
         instruction = self.system_format.format(model_char=prompt.model_char)
 
         if prompt.model_char.example_chats:
@@ -249,4 +252,66 @@ class InstructRpFormatter(PromptFormatter):
         sender_name = self._ex_sender_name(last_msg, prompt.model_char.name)
         res.add(f"{sender_name}:", is_input=True)
         res.add(last_msg.text, is_input=False)
+        return res
+
+
+class ChaiTruncatingFormatter(PromptFormatter):
+    do_truncate: bool = True
+
+    def _ex_sender_name(self, msg: ChatMessage, bot_name: str) -> str:
+        if msg.sender == MessageSender.human:
+            return "User"
+        return bot_name
+
+    def format(
+        self,
+        prompt: Prompt,
+        special_tokens: Dict[str, str],
+        conversion_context: ConversionContext | None = None,
+    ) -> FormatResult:
+        if conversion_context is None:
+            conversion_context = ConversionContext.default()
+
+        if not isinstance(prompt, RoleplayPrompt):
+            raise NotImplementedError()
+
+        if "**<MEMORY>**" in prompt.model_char.description:
+            chai_prompt, chai_memory = prompt.model_char.description.split(
+                "**<MEMORY>**"
+            )
+        else:
+            chai_prompt = prompt.model_char.description
+            if prompt.model_char.example_chats:
+                chunks = []
+                for idx, chat in enumerate(prompt.model_char.example_chats):
+                    log = "\n".join(
+                        f"{self._ex_sender_name(msg, prompt.model_char.name)}: {msg.text}"
+                        for msg in chat.messages
+                    )
+                    if not log.strip():
+                        continue
+                    chunks.append(log)
+                chai_memory = "\n\n".join(chunks)
+            else:
+                chai_memory = ""
+
+        if self.do_truncate:
+            # yes, character-wise
+            chai_memory = chai_memory[:1024]
+            chai_prompt = chai_prompt[:1024]
+
+        if prompt.user_char:
+            user_name = prompt.user_char.name
+        else:
+            user_name = "Anonymous user"
+
+        header = f" ***character:{prompt.model_char.name} ***description:{chai_prompt} ***memory:{chai_memory} ***username:{user_name}"
+        res = FormatResult()
+        res.add(header, is_input=True)
+
+        for msg in prompt.messages:
+            is_user = msg.sender != prompt.model_char.name
+            tag = " ***user:" if is_user else f" ***agent:"
+            res.add(tag, is_input=True)
+            res.add(f"{msg.sender}:{msg.text}", is_input=not is_user)
         return res

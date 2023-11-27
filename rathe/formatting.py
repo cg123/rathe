@@ -119,6 +119,9 @@ class FormatResult:
         """
         import torch
 
+        if not self.chunks:
+            return {}
+
         res = {
             "input_ids": [],
             "attention_mask": [],
