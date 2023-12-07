@@ -202,7 +202,11 @@ class InstructRpFormatter(PromptFormatter):
         if not isinstance(prompt, RoleplayPrompt):
             return self.inner.format(prompt, special_tokens, conversion_context)
 
-        while prompt.messages and prompt.messages[-1].sender != MessageSender.model:
+        user_name = prompt.user_char.name if prompt.user_char else "User"
+        while prompt.messages and prompt.messages[-1].sender in (
+            MessageSender.human,
+            user_name,
+        ):
             prompt.messages.pop(-1)
 
         if not prompt.messages:

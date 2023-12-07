@@ -287,7 +287,7 @@ rw = wonderwords.RandomWord()
 
 
 class PippaParser(PromptParser):
-    random_usernames: bool = False
+    random_usernames: bool = True
 
     def get_username(self):
         if not self.random_usernames:
