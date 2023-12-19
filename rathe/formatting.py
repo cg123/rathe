@@ -141,6 +141,9 @@ class FormatResult:
             for key in tokenized:
                 tokenized[key] = tokenized[key].squeeze(0)
 
+            if len(tokenized["input_ids"]) < 1:
+                continue
+
             if tokenized["input_ids"][0] == tokenizer.bos_token_id and (
                 i > 0 or not options.add_bos
             ):
@@ -241,7 +244,7 @@ class AlpacaPromptFormatter(PromptFormatter):
         default_factory=lambda: WrapperStrings("### Input:\n", "\n\n")
     )
     output_wrap: WrapperStrings = field(
-        default_factory=lambda: WrapperStrings("### Response:\n")
+        default_factory=lambda: WrapperStrings("### Response:\n", suffix="{eos_token}")
     )
 
     def format(
@@ -445,6 +448,7 @@ class ChatPromptFormatter(PromptFormatter):
             user_wrapper=WrapperStrings("<|im_start|>user\n", "<|im_end|>\n"),
             model_wrapper=WrapperStrings("<|im_start|>assistant\n", "<|im_end|>\n"),
             system_wrapper=WrapperStrings("<|im_start|>system\n", "<|im_end|>\n"),
+            suffix="{eos_token}",
         )
 
     @classmethod
@@ -496,3 +500,17 @@ def get_formatter(name: str):
         import rathe.rp
 
         return rathe.rp.InstructRpFormatter(AlpacaPromptFormatter())
+    elif name == "chaitrunc":
+        import rathe.rp
+
+        return rathe.rp.ChaiTruncatingFormatter()
+    elif name == "chatml_rp":
+        import rathe.rp
+
+        return rathe.rp.NamePrefixedChatRpFormatter(ChatPromptFormatter.chatml())
+    elif name == "economic_rp":
+        import rathe.rp
+
+        return rathe.rp.NamePrefixedChatRpFormatter(
+            ChatPromptFormatter.llama_economic()
+        )

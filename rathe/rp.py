@@ -177,12 +177,90 @@ class ChatMlRpFormatter(PromptFormatter):
         return res
 
 
+def format_examples(char_name: str, chats: List[ChatPrompt]):
+    formatted_chats = []
+    for idx, chat in enumerate(chats):
+        chunks = []
+        if len(chats) > 1:
+            chunks.append(f"Example Chat #{idx +1}:")
+        else:
+            chunks.append("Example chat:")
+        chunks.append("```")
+        user_name = "{{random_user_" + str(random.choice(range(10))) + "}}"
+        for msg in chat.messages:
+            prefix = user_name if msg.sender == MessageSender.human else char_name
+            chunks.append(f"{prefix}: {msg.text}")
+        chunks.append("```")
+        formatted_chats.append("\n".join(chunks))
+    return "\n\n".join(formatted_chats)
+
+
+@dataclass
+class NamePrefixedChatRpFormatter(PromptFormatter):
+    inner: ChatPromptFormatter
+    system_format: str = (
+        "Enter roleplay mode. You are {model_char.name}.\n{model_char.description}"
+    )
+    length_annotate_prob: float = 0.5
+
+    def _message_wrap(self, is_user: bool, sender: str, text: str) -> str:
+        return f"<|im_start|>{''}{sender}\n{text}<|im_end|>\n"
+
+    def _ex_sender_name(self, msg: ChatMessage, bot_name: str) -> str:
+        if msg.sender == MessageSender.human:
+            return "User"
+        return bot_name
+
+    def format(
+        self,
+        prompt: Prompt,
+        special_tokens: Dict[str, str],
+        conversion_context: Optional[ConversionContext] = None,
+    ) -> FormatResult:
+        if conversion_context is None:
+            conversion_context = ConversionContext.default()
+
+        if isinstance(prompt, RoleplayPrompt):
+            system_msg = self.system_format.format(model_char=prompt.model_char)
+            if prompt.model_char.example_chats:
+                system_msg = f"{system_msg}\n{format_examples(prompt.model_char.name, prompt.model_char.example_chats)}"
+
+            messages = [
+                ChatMessage(
+                    MessageSender.system,
+                    system_msg,
+                )
+            ]
+
+            user_name = prompt.user_char.name if prompt.user_char else "User"
+
+            for msg in prompt.messages:
+                sender = msg.sender
+                if self.length_annotate_prob > 0 and sender == prompt.model_char.name:
+                    length_text = describe_length(msg.text, self.length_annotate_prob)
+                    if length_text:
+                        sender = f"{sender} (Length = {length_text})"
+
+                prefix = (
+                    "" if msg.sender.lower() == user_name.lower() else f"{sender}: "
+                )
+                messages.append(
+                    ChatMessage(
+                        sender=MessageSender.model
+                        if msg.sender == prompt.model_char.name
+                        else MessageSender.human,
+                        text=f"{prefix}{msg.text}",
+                    )
+                )
+            prompt = ChatPrompt(messages)
+
+        return self.inner.format(prompt, special_tokens, conversion_context)
+
+
 @dataclass
 class InstructRpFormatter(PromptFormatter):
     inner: PromptFormatter
-    system_format: str = (
-        "Enter roleplay mode. You are {model_char.name}.\n{model_char.description}\n"
-    )
+    system_format: str = "Enter roleplay mode. You are {model_char.name}.\n\nAbout {model_char.name}:\n{model_char.description}\n"
     length_annotate_prob: float = 0.5
 
     def _ex_sender_name(self, msg: ChatMessage, bot_name: str) -> str:
@@ -271,7 +349,7 @@ class ChaiTruncatingFormatter(PromptFormatter):
         self,
         prompt: Prompt,
         special_tokens: Dict[str, str],
-        conversion_context: ConversionContext | None = None,
+        conversion_context: Optional[ConversionContext] = None,
     ) -> FormatResult:
         if conversion_context is None:
             conversion_context = ConversionContext.default()
